@@ -5,7 +5,10 @@
 **a. Initial design**
 
 - Briefly describe your initial UML design.
+=> Classes (Owner, Pet, Task, Schedule, Schedule, Scheduler)
+
 - What classes did you include, and what responsibilities did you assign to each?
+=> My core system consists of of 6 classes: Owner and Pet to represent user data, Task represents care activitires, Schedule represent daily plan, Scheduler contains the algorithm, Constraints manages scheduling rules.
 
 **b. Design changes**
 
