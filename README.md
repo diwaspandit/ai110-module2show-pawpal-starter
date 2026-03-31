@@ -53,6 +53,38 @@ The scheduler now includes several practical planning upgrades:
 - **Conflict detection warnings** that flag overlapping tasks (same pet or different pets) without crashing the app.
 - **Time-window placement** and anti-starvation scoring to make schedules more realistic and balanced.
 
+## Features
+
+- **Sorting by time:** Chronological ordering using `HH:MM` task times, with fallback to `scheduled_minute` and unscheduled tasks placed last.
+- **Priority density ranking:** Score-per-minute ranking to maximize impact when available time is limited.
+- **Anti-starvation boost:** Skip-streak bonus increases priority for repeatedly skipped tasks.
+- **Constraint-aware planning:** Enforces owner availability and optional `max_total_minutes` limits.
+- **Time-window placement:** Places tasks into valid allowed windows while avoiding overlaps.
+- **Conflict warnings:** Detects and reports overlapping tasks (same pet or across pets) without failing schedule generation.
+- **Flexible filtering:** Filters tasks by completion status and pet name.
+- **Daily/weekly recurrence:** Completing recurring tasks auto-creates the next occurrence using `timedelta`.
+- **Plan explanation:** Generates a clear summary of planned vs. unscheduled tasks and total scheduled time.
+
+## Demo (Final Streamlit App)
+
+Run the app locally:
+
+```bash
+streamlit run app.py
+```
+
+Then open the local URL shown by Streamlit (usually `http://localhost:8501`).
+
+<a href="/course_images/ai110/your_screenshot_name.png" target="_blank"><img src='Demo.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
+
+The final demo supports:
+
+- Managing owner profile and multiple pets
+- Adding tasks with duration, priority, category, and frequency
+- Viewing sorted/filtered task tables
+- Seeing conflict warnings in real time
+- Generating a daily schedule with explanation and unscheduled-task reasons
+
 ## Testing PawPal+
 
 Run the automated tests with:

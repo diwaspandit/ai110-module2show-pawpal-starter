@@ -124,21 +124,60 @@ if st.button("Add task"):
     else:
         st.error("Task data is invalid. Check title, duration, priority, and frequency.")
 
+st.markdown("#### Task View")
+view_filter = st.selectbox(
+    "Completion filter",
+    ["all", "incomplete", "completed"],
+    index=0,
+)
+
 if selected_pet.tasks:
-    st.write(f"Current tasks for {selected_pet.name}:")
+    all_pet_tasks = st.session_state.scheduler.filter_tasks_by_completion_or_pet_name(
+        st.session_state.owner.get_all_tasks(),
+        pet_name=selected_pet.name,
+    )
+
+    if view_filter == "completed":
+        filtered_tasks = st.session_state.scheduler.filter_tasks_by_completion_or_pet_name(
+            all_pet_tasks,
+            completed=True,
+        )
+    elif view_filter == "incomplete":
+        filtered_tasks = st.session_state.scheduler.filter_tasks_by_completion_or_pet_name(
+            all_pet_tasks,
+            completed=False,
+        )
+    else:
+        filtered_tasks = all_pet_tasks
+
+    sorted_tasks = st.session_state.scheduler.sort_by_time(filtered_tasks)
+
+    st.success(f"Showing {len(sorted_tasks)} sorted task(s) for {selected_pet.name}.")
     st.table(
         [
             {
                 "title": task.title,
+                "time": task.time or "--",
+                "scheduled_minute": task.scheduled_minute if task.scheduled_minute is not None else "--",
                 "duration_minutes": task.duration_minutes,
                 "priority": task.priority.value,
-                "category": task.category,
+                "category": task.category or "--",
                 "frequency": task.frequency,
                 "completed": task.completed,
             }
-            for task in selected_pet.tasks
+            for task in sorted_tasks
         ]
     )
+
+    conflict_warnings = st.session_state.scheduler.detect_scheduling_conflicts(
+        st.session_state.owner.get_all_tasks()
+    )
+    if conflict_warnings:
+        st.warning("Scheduling conflicts detected:")
+        for warning in conflict_warnings:
+            st.warning(warning)
+    else:
+        st.success("No scheduling conflicts detected.")
 else:
     st.info(f"No tasks yet for {selected_pet.name}. Add one above.")
 
@@ -167,6 +206,7 @@ if st.button("Generate schedule"):
     )
 
     if schedule.items:
+        st.success("Schedule generated successfully.")
         st.write(f"Today's schedule for {selected_pet.name}:")
         st.table(
             [
