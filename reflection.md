@@ -14,7 +14,7 @@
 
 - Did your design change during implementation?
 - If yes, describe at least one change and why you made it.
-
+=> Yes. I refined the original UML to make relationships and data types safer. I linked `Schedule` to both `Owner` and `Pet` so each generated plan clearly belongs to one owner-pet context. I also updated `Task.priority` from a raw string to a `PriorityLevel` enum (`low`, `medium`, `high`) to avoid invalid values and reduce bugs when ranking tasks. Finally, I changed schedule time fields from free-form strings to minute-based integers so future conflict-checking and sorting logic is easier to implement reliably.
 ---
 
 ## 2. Scheduling Logic and Tradeoffs

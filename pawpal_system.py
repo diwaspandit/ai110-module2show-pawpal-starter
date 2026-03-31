@@ -1,7 +1,14 @@
 # logic layer
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
+
+
+class PriorityLevel(str, Enum):
+	LOW = "low"
+	MEDIUM = "medium"
+	HIGH = "high"
 
 
 @dataclass
@@ -36,8 +43,9 @@ class Pet:
 class Task:
 	title: str
 	duration_minutes: int
-	priority: str
+	priority: PriorityLevel
 	category: Optional[str] = None
+	pet: Optional[Pet] = None
 
 	def validate(self) -> bool:
 		pass
@@ -49,8 +57,8 @@ class Task:
 @dataclass
 class Constraints:
 	max_total_minutes: Optional[int] = None
-	allowed_time_windows: List[Tuple[str, str]] = field(default_factory=list)
-	priority_weights: Dict[str, int] = field(default_factory=dict)
+	allowed_time_windows: List[Tuple[int, int]] = field(default_factory=list)
+	priority_weights: Dict[PriorityLevel, int] = field(default_factory=dict)
 	owner_preferences: Dict[str, Any] = field(default_factory=dict)
 
 	def is_task_allowed(self, task: Task) -> bool:
@@ -65,11 +73,14 @@ class Constraints:
 
 @dataclass
 class Schedule:
-	items: List[Tuple[str, Task]] = field(default_factory=list)
+	owner: Optional[Owner] = None
+	pet: Optional[Pet] = None
+	items: List[Tuple[int, Task]] = field(default_factory=list)
+	unscheduled: List[Tuple[Task, str]] = field(default_factory=list)
 	total_minutes: int = 0
 	explanation: str = ""
 
-	def add_item(self, task: Task, start_time: str) -> bool:
+	def add_item(self, task: Task, start_minute: int) -> bool:
 		pass
 
 	def remove_item(self, task: Task) -> None:
@@ -81,7 +92,7 @@ class Schedule:
 	def get_explanation(self) -> str:
 		pass
 
-	def is_feasible(self, owner: Owner) -> bool:
+	def is_feasible(self) -> bool:
 		pass
 
 
