@@ -90,6 +90,18 @@ def print_filtered_task_views(owner: Owner, scheduler: Scheduler) -> None:
 		print(f"- {task.title} ({status})")
 
 
+def print_conflict_warnings(owner: Owner, scheduler: Scheduler) -> None:
+	"""Print lightweight conflict warnings for overlapping task times."""
+	warnings = scheduler.detect_scheduling_conflicts(owner.get_all_tasks())
+	print("\nConflict detection")
+	print("-" * 52)
+	if not warnings:
+		print("No time conflicts detected.")
+		return
+	for warning in warnings:
+		print(f"⚠️  {warning}")
+
+
 def main() -> None:
 	# Owner
 	owner = Owner(
@@ -141,7 +153,7 @@ def main() -> None:
 			title="Medication",
 			duration_minutes=10,
 			priority=PriorityLevel.HIGH,
-			time="07:00",
+			time="07:30",
 			category="meds",
 			description="Daily allergy medication",
 		)
@@ -163,6 +175,7 @@ def main() -> None:
 		print_sorted_tasks_for_pet(pet, scheduler)
 
 	print_filtered_task_views(owner, scheduler)
+	print_conflict_warnings(owner, scheduler)
 
 	for pet in owner.pets:
 		print_schedule_for_pet(pet, scheduler)

@@ -400,6 +400,44 @@ class Scheduler:
 			),
 		)
 
+	def detect_scheduling_conflicts(self, tasks: List[Task]) -> List[str]:
+		"""Return lightweight warnings for tasks that overlap in time."""
+		warnings: List[str] = []
+		timed_tasks: List[Tuple[int, int, Task]] = []
+
+		for task in tasks:
+			start_minute: Optional[int] = None
+			if task.time is not None:
+				if not task.validate():
+					continue
+				hours, minutes = task.time.split(":")
+				start_minute = int(hours) * 60 + int(minutes)
+			elif task.scheduled_minute is not None:
+				start_minute = task.scheduled_minute
+
+			if start_minute is None:
+				continue
+
+			end_minute = start_minute + task.duration_minutes
+			timed_tasks.append((start_minute, end_minute, task))
+
+		timed_tasks.sort(key=lambda entry: entry[0])
+
+		for idx, (start_a, end_a, task_a) in enumerate(timed_tasks):
+			for start_b, end_b, task_b in timed_tasks[idx + 1 :]:
+				if start_b >= end_a:
+					break
+				if start_a < end_b and start_b < end_a:
+					pet_a = task_a.pet.name if task_a.pet is not None else "Unknown pet"
+					pet_b = task_b.pet.name if task_b.pet is not None else "Unknown pet"
+					conflict_time = f"{start_b // 60:02d}:{start_b % 60:02d}"
+					warnings.append(
+						f"Conflict: '{task_a.title}' ({pet_a}) overlaps with "
+						f"'{task_b.title}' ({pet_b}) around {conflict_time}."
+					)
+
+		return warnings
+
 	def filter_tasks(
 		self,
 		tasks: List[Task],

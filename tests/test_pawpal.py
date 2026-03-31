@@ -296,3 +296,56 @@ def test_mark_task_complete_creates_next_weekly_task() -> None:
 	assert next_task is not None
 	assert next_task.due_date == date(2026, 4, 7)
 	assert next_task.pet is pet
+
+
+def test_detect_scheduling_conflicts_across_pets() -> None:
+	dog = Pet(name="Mochi", species="dog")
+	cat = Pet(name="Luna", species="cat")
+
+	dog_task = Task(
+		title="Morning walk",
+		duration_minutes=30,
+		priority=PriorityLevel.HIGH,
+		time="07:30",
+	)
+	cat_task = Task(
+		title="Medication",
+		duration_minutes=10,
+		priority=PriorityLevel.HIGH,
+		time="07:30",
+	)
+	dog.add_task(dog_task)
+	cat.add_task(cat_task)
+
+	scheduler = Scheduler()
+	warnings = scheduler.detect_scheduling_conflicts([dog_task, cat_task])
+
+	assert len(warnings) == 1
+	assert "Morning walk" in warnings[0]
+	assert "Medication" in warnings[0]
+
+
+def test_detect_scheduling_conflicts_same_pet() -> None:
+	pet = Pet(name="Mochi", species="dog")
+
+	first = Task(
+		title="Feeding",
+		duration_minutes=20,
+		priority=PriorityLevel.MEDIUM,
+		time="08:00",
+	)
+	second = Task(
+		title="Training",
+		duration_minutes=15,
+		priority=PriorityLevel.MEDIUM,
+		time="08:10",
+	)
+	pet.add_task(first)
+	pet.add_task(second)
+
+	scheduler = Scheduler()
+	warnings = scheduler.detect_scheduling_conflicts(pet.tasks)
+
+	assert len(warnings) == 1
+	assert "Feeding" in warnings[0]
+	assert "Training" in warnings[0]
