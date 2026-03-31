@@ -1,6 +1,7 @@
 # logic layer
 
 from dataclasses import dataclass, field
+from datetime import date, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -87,6 +88,7 @@ class Task:
 	title: str
 	duration_minutes: int
 	priority: PriorityLevel
+	due_date: Optional[date] = None
 	time: Optional[str] = None
 	category: Optional[str] = None
 	description: Optional[str] = None
@@ -106,6 +108,8 @@ class Task:
 		if not isinstance(self.priority, PriorityLevel):
 			return False
 		if self.frequency not in {"once", "daily", "weekly"}:
+			return False
+		if self.due_date is not None and not isinstance(self.due_date, date):
 			return False
 		if self.time is not None:
 			parts = self.time.split(":")
@@ -323,6 +327,32 @@ class Scheduler:
 		self._active_owner = None
 		self._active_pet = None
 		return schedule
+
+	def mark_task_complete(self, task: Task, completed_on: Optional[date] = None) -> Optional[Task]:
+		"""Mark task complete and create next recurring instance for daily/weekly tasks."""
+		completion_date = completed_on if completed_on is not None else date.today()
+		task.completed = True
+
+		if task.frequency not in {"daily", "weekly"}:
+			return None
+
+		next_delta = timedelta(days=1 if task.frequency == "daily" else 7)
+		next_task = Task(
+			title=task.title,
+			duration_minutes=task.duration_minutes,
+			priority=task.priority,
+			due_date=completion_date + next_delta,
+			time=task.time,
+			category=task.category,
+			description=task.description,
+			frequency=task.frequency,
+			completed=False,
+		)
+
+		if task.pet is not None:
+			task.pet.add_task(next_task)
+
+		return next_task
 
 	def _find_slot_for_task(
 		self,

@@ -1,3 +1,5 @@
+from datetime import date
+
 from pawpal_system import Constraints, Owner, Pet, PriorityLevel, Schedule, Scheduler, Task
 
 
@@ -256,3 +258,41 @@ def test_filter_tasks_by_pet_name_case_insensitive() -> None:
 	for_mochi = scheduler.filter_tasks_by_completion_or_pet_name(tasks, pet_name="mochi")
 
 	assert [task.title for task in for_mochi] == ["Walk"]
+
+
+def test_mark_task_complete_creates_next_daily_task() -> None:
+	pet = Pet(name="Mochi", species="dog")
+	task = Task(
+		title="Daily meds",
+		duration_minutes=10,
+		priority=PriorityLevel.HIGH,
+		frequency="daily",
+	)
+	pet.add_task(task)
+
+	scheduler = Scheduler()
+	next_task = scheduler.mark_task_complete(task, completed_on=date(2026, 3, 31))
+
+	assert next_task is not None
+	assert task.completed is True
+	assert next_task.due_date == date(2026, 4, 1)
+	assert next_task.completed is False
+	assert next_task.pet is pet
+
+
+def test_mark_task_complete_creates_next_weekly_task() -> None:
+	pet = Pet(name="Luna", species="cat")
+	task = Task(
+		title="Weekly grooming",
+		duration_minutes=30,
+		priority=PriorityLevel.MEDIUM,
+		frequency="weekly",
+	)
+	pet.add_task(task)
+
+	scheduler = Scheduler()
+	next_task = scheduler.mark_task_complete(task, completed_on=date(2026, 3, 31))
+
+	assert next_task is not None
+	assert next_task.due_date == date(2026, 4, 7)
+	assert next_task.pet is pet
