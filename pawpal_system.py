@@ -329,7 +329,12 @@ class Scheduler:
 		return schedule
 
 	def mark_task_complete(self, task: Task, completed_on: Optional[date] = None) -> Optional[Task]:
-		"""Mark task complete and create next recurring instance for daily/weekly tasks."""
+		"""Mark a task complete and spawn the next recurring occurrence.
+
+		For `daily` tasks this creates a new task with `due_date = completed_on + 1 day`.
+		For `weekly` tasks this creates a new task with `due_date = completed_on + 7 days`.
+		For non-recurring tasks, returns `None`.
+		"""
 		completion_date = completed_on if completed_on is not None else date.today()
 		task.completed = True
 
@@ -361,7 +366,11 @@ class Scheduler:
 		earliest_start: int,
 		owner: Owner,
 	) -> Optional[int]:
-		"""Find earliest non-conflicting start minute, respecting allowed windows."""
+		"""Find the earliest valid slot for a task within allowed time windows.
+
+		The method scans configured windows in chronological order and returns the
+		first non-overlapping minute that can fit the full task duration.
+		"""
 		windows = self.constraints.allowed_time_windows
 		if not windows:
 			windows = [(owner.preferences.get("day_start_minute", 8 * 60), 24 * 60)]
@@ -386,7 +395,10 @@ class Scheduler:
 		return self.sort_by_time(tasks)
 
 	def sort_by_time(self, tasks: List[Task]) -> List[Task]:
-		"""Sort tasks by `time` in HH:MM format using a lambda key."""
+		"""Sort tasks chronologically using `time` (HH:MM) or `scheduled_minute`.
+
+		Tasks with no time metadata are placed last. Ties are broken by title.
+		"""
 		return sorted(
 			tasks,
 			key=lambda task: (
@@ -401,7 +413,11 @@ class Scheduler:
 		)
 
 	def detect_scheduling_conflicts(self, tasks: List[Task]) -> List[str]:
-		"""Return lightweight warnings for tasks that overlap in time."""
+		"""Detect overlapping task windows and return warning messages.
+
+		This is intentionally lightweight: it does not raise exceptions or mutate
+		tasks. It supports overlaps for the same pet or across different pets.
+		"""
 		warnings: List[str] = []
 		timed_tasks: List[Tuple[int, int, Task]] = []
 
@@ -474,7 +490,7 @@ class Scheduler:
 		completed: Optional[bool] = None,
 		pet_name: Optional[str] = None,
 	) -> List[Task]:
-		"""Filter tasks by completion status and/or pet name."""
+		"""Filter tasks by completion status and/or pet name (case-insensitive)."""
 		filtered: List[Task] = []
 		normalized_pet_name = pet_name.strip().lower() if pet_name is not None else None
 

@@ -28,6 +28,9 @@
 
 - Describe one tradeoff your scheduler makes.
 - Why is that tradeoff reasonable for this scenario?
+=> One tradeoff is that the scheduler uses a greedy priority-and-score-per-minute approach instead of a global optimizer (like full-day dynamic programming). It picks the next best task that fits, which is simple and fast, but it may miss a theoretically perfect combination in edge cases.
+
+=> This is reasonable for this scenario because PawPal+ is an interactive planning assistant where responsiveness and understandable behavior matter more than mathematically optimal packing. The greedy logic is easier to explain to users, easier to debug, and still produces practical daily plans under normal time constraints.
 
 ---
 
