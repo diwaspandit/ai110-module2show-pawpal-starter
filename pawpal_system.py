@@ -77,6 +77,10 @@ class Pet:
 		"""Return tasks for this pet that are not completed."""
 		return [task for task in self.tasks if not task.completed]
 
+	def get_tasks_by_status(self, completed: bool = False) -> List["Task"]:
+		"""Return pet tasks filtered by completion status."""
+		return [task for task in self.tasks if task.completed is completed]
+
 
 @dataclass
 class Task:
@@ -88,6 +92,8 @@ class Task:
 	scheduled_minute: Optional[int] = None
 	frequency: str = "daily"
 	completed: bool = False
+	last_completed_day: Optional[int] = None
+	skip_streak: int = 0
 	pet: Optional[Pet] = None
 
 	def validate(self) -> bool:
@@ -121,6 +127,31 @@ class Task:
 		"""Mark this task as not completed."""
 		self.completed = False
 
+	def increment_skip_streak(self) -> None:
+		"""Increase skip counter when a due task cannot be scheduled."""
+		self.skip_streak += 1
+
+	def reset_skip_streak(self) -> None:
+		"""Reset skip counter once a task is scheduled/completed."""
+		self.skip_streak = 0
+
+	def mark_complete_for_day(self, day_index: int) -> None:
+		"""Mark this task complete and record the day index for recurring logic."""
+		self.completed = True
+		self.last_completed_day = day_index
+
+	def is_due_on_day(self, day_index: int = 0) -> bool:
+		"""Return whether this task is due on a given day index."""
+		if self.frequency == "once":
+			return not self.completed
+		if self.frequency == "daily":
+			return self.last_completed_day != day_index
+		if self.frequency == "weekly":
+			if self.last_completed_day is None:
+				return True
+			return (day_index - self.last_completed_day) >= 7
+		return not self.completed
+
 
 @dataclass
 class Constraints:
@@ -129,11 +160,11 @@ class Constraints:
 	priority_weights: Dict[PriorityLevel, int] = field(default_factory=dict)
 	owner_preferences: Dict[str, Any] = field(default_factory=dict)
 
-	def is_task_allowed(self, task: Task) -> bool:
+	def is_task_allowed(self, task: Task, day_index: int = 0) -> bool:
 		"""Return whether a task is eligible under current constraints."""
 		if not task.validate():
 			return False
-		if task.completed:
+		if not task.is_due_on_day(day_index):
 			return False
 		blocked_categories = self.owner_preferences.get("blocked_categories", [])
 		if task.category and task.category in blocked_categories:
@@ -150,16 +181,17 @@ class Constraints:
 			limit = 0
 		return max(limit - schedule.get_total_duration(), 0)
 
-	def score_task(self, task: Task, owner: Owner, pet: Pet) -> int:
+	def score_task(self, task: Task, owner: Owner, pet: Pet) -> float:
 		"""Compute a weighted score for task ranking."""
-		base = self.priority_weights.get(task.priority, task.get_priority_score())
+		base = float(self.priority_weights.get(task.priority, task.get_priority_score()))
 		bonus = 0
 		preferred_categories = owner.preferences.get("preferred_categories", [])
 		if task.category and task.category in preferred_categories:
 			bonus += 1
 		if task.pet is not None and task.pet is pet:
 			bonus += 1
-		return base + bonus
+		anti_starvation_bonus = min(task.skip_streak, 5)
+		return base + bonus + anti_starvation_bonus
 
 
 @dataclass
@@ -171,11 +203,24 @@ class Schedule:
 	total_minutes: int = 0
 	explanation: str = ""
 
+	def has_conflict(self, start_minute: int, duration_minutes: int) -> bool:
+		"""Return whether a proposed time range overlaps an existing item."""
+		end_minute = start_minute + duration_minutes
+		for existing_start, existing_task in self.items:
+			existing_end = existing_start + existing_task.duration_minutes
+			if start_minute < existing_end and end_minute > existing_start:
+				return True
+		return False
+
 	def add_item(self, task: Task, start_minute: int) -> bool:
 		"""Add a task at a start minute if it passes validation and bounds checks."""
 		if start_minute < 0 or start_minute > 1439:
 			return False
 		if not task.validate():
+			return False
+		if start_minute + task.duration_minutes > 1440:
+			return False
+		if self.has_conflict(start_minute, task.duration_minutes):
 			return False
 		task.scheduled_minute = start_minute
 		self.items.append((start_minute, task))
@@ -220,6 +265,8 @@ class Scheduler:
 		owner: Owner,
 		pet: Pet,
 		tasks: List[Task],
+		day_index: int = 0,
+		include_completed: bool = False,
 	) -> Schedule:
 		"""Build and return a daily schedule for a specific owner-pet context."""
 		schedule = Schedule(owner=owner, pet=pet)
@@ -230,12 +277,15 @@ class Scheduler:
 		if not candidate_tasks:
 			candidate_tasks = pet.get_incomplete_tasks()
 
-		filtered_tasks: List[Task] = []
-		for task in candidate_tasks:
-			if task.pet is not None and task.pet is not pet:
-				continue
-			if self.constraints.is_task_allowed(task):
-				filtered_tasks.append(task)
+		filtered_tasks = self.filter_tasks(
+			tasks=candidate_tasks,
+			pet=pet,
+			status="all" if include_completed else "incomplete",
+			day_index=day_index,
+		)
+		filtered_tasks = [
+			task for task in filtered_tasks if self.constraints.is_task_allowed(task, day_index=day_index)
+		]
 
 		ranked_tasks = self.rank_tasks(filtered_tasks)
 
@@ -248,12 +298,16 @@ class Scheduler:
 
 		for task in ranked_tasks:
 			if schedule.get_total_duration() + task.duration_minutes <= max_minutes:
-				added = schedule.add_item(task, cursor)
+				slot = self._find_slot_for_task(schedule, task, cursor, owner)
+				added = schedule.add_item(task, slot) if slot is not None else False
 				if added:
-					cursor += task.duration_minutes
+					task.reset_skip_streak()
+					cursor = max(cursor, slot + task.duration_minutes)
 				else:
+					task.increment_skip_streak()
 					schedule.unscheduled.append((task, "Failed to add to schedule."))
 			else:
+				task.increment_skip_streak()
 				schedule.unscheduled.append((task, "Not enough available time."))
 
 		schedule.explanation = self.explain_plan(schedule)
@@ -261,20 +315,91 @@ class Scheduler:
 		self._active_pet = None
 		return schedule
 
+	def _find_slot_for_task(
+		self,
+		schedule: Schedule,
+		task: Task,
+		earliest_start: int,
+		owner: Owner,
+	) -> Optional[int]:
+		"""Find earliest non-conflicting start minute, respecting allowed windows."""
+		windows = self.constraints.allowed_time_windows
+		if not windows:
+			windows = [(owner.preferences.get("day_start_minute", 8 * 60), 24 * 60)]
+
+		for window_start, window_end in sorted(windows, key=lambda window: window[0]):
+			candidate = max(window_start, earliest_start)
+			while candidate + task.duration_minutes <= window_end:
+				if not schedule.has_conflict(candidate, task.duration_minutes):
+					return candidate
+
+				next_candidate = candidate + 1
+				for existing_start, existing_task in schedule.items:
+					existing_end = existing_start + existing_task.duration_minutes
+					if candidate < existing_end and (candidate + task.duration_minutes) > existing_start:
+						next_candidate = max(next_candidate, existing_end)
+				candidate = next_candidate
+
+		return None
+
+	def sort_tasks_by_time(self, tasks: List[Task]) -> List[Task]:
+		"""Return tasks sorted by scheduled minute, with unscheduled tasks last."""
+		return sorted(
+			tasks,
+			key=lambda task: (
+				task.scheduled_minute is None,
+				task.scheduled_minute if task.scheduled_minute is not None else 10**9,
+				task.title.lower(),
+			),
+		)
+
+	def filter_tasks(
+		self,
+		tasks: List[Task],
+		pet: Optional[Pet] = None,
+		status: str = "incomplete",
+		day_index: int = 0,
+	) -> List[Task]:
+		"""Filter tasks by pet association, due recurrence, and completion status."""
+		filtered: List[Task] = []
+
+		for task in tasks:
+			if pet is not None and task.pet is not None and task.pet is not pet:
+				continue
+
+			if not task.is_due_on_day(day_index):
+				continue
+
+			effective_completed = task.completed
+			if task.frequency in {"daily", "weekly"} and task.is_due_on_day(day_index):
+				effective_completed = False
+
+			if status == "incomplete" and effective_completed:
+				continue
+			if status == "completed" and not effective_completed:
+				continue
+
+			filtered.append(task)
+
+		return filtered
+
 	def rank_tasks(self, tasks: List[Task]) -> List[Task]:
-		"""Sort tasks by descending score, then by shorter duration and title."""
+		"""Sort tasks by descending score-per-minute, then by shorter duration and title."""
 		owner = self._active_owner
 		pet = self._active_pet
 
-		def _score(task: Task) -> int:
+		def _score(task: Task) -> float:
 			if owner is None or pet is None:
-				return task.get_priority_score()
+				return float(task.get_priority_score() + min(task.skip_streak, 5))
 			return self.constraints.score_task(task, owner, pet)
+
+		def _density(task: Task) -> float:
+			return _score(task) / max(task.duration_minutes, 1)
 
 		return sorted(
 			tasks,
 			key=lambda task: (
-				-_score(task),
+				-_density(task),
 				task.duration_minutes,
 				task.title.lower(),
 			),
