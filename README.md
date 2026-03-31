@@ -52,3 +52,26 @@ The scheduler now includes several practical planning upgrades:
 - **Flexible filtering** by completion status and pet name.
 - **Conflict detection warnings** that flag overlapping tasks (same pet or different pets) without crashing the app.
 - **Time-window placement** and anti-starvation scoring to make schedules more realistic and balanced.
+
+## Testing PawPal+
+
+Run the automated tests with:
+
+```bash
+python -m pytest
+```
+
+Current result: **16 passed in 0.03s**.
+
+The test suite covers core scheduling reliability, including:
+
+- Task completion state updates
+- Adding tasks to pets
+- Sorting tasks by scheduled minute and `HH:MM` time
+- Filtering by pet and completion status
+- Recurring task behavior (`daily`/`weekly` next-task creation)
+- Overlap/conflict detection (same pet and across pets)
+- Rank/selection behavior (score-per-minute and anti-starvation)
+- Placement within allowed time windows
+
+**Confidence Level:** ⭐⭐⭐⭐⭐ (5/5)
