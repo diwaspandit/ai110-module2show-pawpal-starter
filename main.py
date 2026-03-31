@@ -50,6 +50,46 @@ def print_schedule_for_pet(pet: Pet, scheduler: Scheduler) -> None:
 	print(f"Summary: {schedule.get_explanation()}")
 
 
+def print_sorted_tasks_for_pet(pet: Pet, scheduler: Scheduler) -> None:
+	"""Show tasks sorted by HH:MM time using Scheduler.sort_by_time."""
+	print(f"\nSorted tasks for {pet.name} (by time):")
+	print("-" * 52)
+	ordered = scheduler.sort_by_time(pet.tasks)
+	for task in ordered:
+		time_label = task.time if task.time is not None else "(no time)"
+		status = "done" if task.completed else "open"
+		print(
+			f"{time_label:>7}  |  {task.title:<18} "
+			f"| {task.priority.value.upper():<6} | {status}"
+		)
+
+
+def print_filtered_task_views(owner: Owner, scheduler: Scheduler) -> None:
+	"""Show filtered task lists by completion status and pet name."""
+	all_tasks = owner.get_all_tasks()
+
+	incomplete = scheduler.filter_tasks_by_completion_or_pet_name(
+		all_tasks,
+		completed=False,
+	)
+	mochi_only = scheduler.filter_tasks_by_completion_or_pet_name(
+		all_tasks,
+		pet_name="Mochi",
+	)
+
+	print("\nFiltered view: incomplete tasks")
+	print("-" * 52)
+	for task in incomplete:
+		pet_name = task.pet.name if task.pet is not None else "Unknown"
+		print(f"- {task.title} ({pet_name})")
+
+	print("\nFiltered view: tasks for Mochi")
+	print("-" * 52)
+	for task in mochi_only:
+		status = "done" if task.completed else "open"
+		print(f"- {task.title} ({status})")
+
+
 def main() -> None:
 	# Owner
 	owner = Owner(
@@ -65,31 +105,25 @@ def main() -> None:
 	owner.add_pet(cat)
 
 	# Tasks (at least three, with different times/durations)
-	dog.add_task(
-		Task(
-			title="Morning walk",
-			duration_minutes=30,
-			priority=PriorityLevel.HIGH,
-			category="walk",
-			description="Neighborhood walk before work",
-		)
-	)
+	# Intentionally added out of chronological order to test sort_by_time().
 	dog.add_task(
 		Task(
 			title="Breakfast",
 			duration_minutes=15,
 			priority=PriorityLevel.MEDIUM,
+			time="08:00",
 			category="feeding",
 			description="Serve morning meal",
 		)
 	)
-	cat.add_task(
+	dog.add_task(
 		Task(
-			title="Medication",
-			duration_minutes=10,
+			title="Morning walk",
+			duration_minutes=30,
 			priority=PriorityLevel.HIGH,
-			category="meds",
-			description="Daily allergy medication",
+			time="07:30",
+			category="walk",
+			description="Neighborhood walk before work",
 		)
 	)
 	cat.add_task(
@@ -97,10 +131,24 @@ def main() -> None:
 			title="Play session",
 			duration_minutes=20,
 			priority=PriorityLevel.LOW,
+			time="18:00",
 			category="enrichment",
 			description="Interactive toy play",
 		)
 	)
+	cat.add_task(
+		Task(
+			title="Medication",
+			duration_minutes=10,
+			priority=PriorityLevel.HIGH,
+			time="07:00",
+			category="meds",
+			description="Daily allergy medication",
+		)
+	)
+
+	# Mark one task complete to demonstrate completion filtering.
+	cat.tasks[1].mark_complete()
 
 	constraints = Constraints(max_total_minutes=90)
 	scheduler = Scheduler(constraints=constraints)
@@ -110,6 +158,11 @@ def main() -> None:
 	print("=" * 52)
 	print(f"Owner: {owner.name}")
 	print(f"Daily time budget: {owner.available_time_minutes} minutes")
+
+	for pet in owner.pets:
+		print_sorted_tasks_for_pet(pet, scheduler)
+
+	print_filtered_task_views(owner, scheduler)
 
 	for pet in owner.pets:
 		print_schedule_for_pet(pet, scheduler)

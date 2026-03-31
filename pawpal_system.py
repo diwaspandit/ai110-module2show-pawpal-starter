@@ -87,6 +87,7 @@ class Task:
 	title: str
 	duration_minutes: int
 	priority: PriorityLevel
+	time: Optional[str] = None
 	category: Optional[str] = None
 	description: Optional[str] = None
 	scheduled_minute: Optional[int] = None
@@ -106,6 +107,14 @@ class Task:
 			return False
 		if self.frequency not in {"once", "daily", "weekly"}:
 			return False
+		if self.time is not None:
+			parts = self.time.split(":")
+			if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
+				return False
+			hours = int(parts[0])
+			minutes = int(parts[1])
+			if not (0 <= hours <= 23 and 0 <= minutes <= 59):
+				return False
 		if self.scheduled_minute is not None and not (0 <= self.scheduled_minute <= 1439):
 			return False
 		return True
@@ -344,11 +353,19 @@ class Scheduler:
 
 	def sort_tasks_by_time(self, tasks: List[Task]) -> List[Task]:
 		"""Return tasks sorted by scheduled minute, with unscheduled tasks last."""
+		return self.sort_by_time(tasks)
+
+	def sort_by_time(self, tasks: List[Task]) -> List[Task]:
+		"""Sort tasks by `time` in HH:MM format using a lambda key."""
 		return sorted(
 			tasks,
 			key=lambda task: (
-				task.scheduled_minute is None,
-				task.scheduled_minute if task.scheduled_minute is not None else 10**9,
+				task.time is None and task.scheduled_minute is None,
+				(
+					(int(task.time.split(":")[0]) * 60 + int(task.time.split(":")[1]))
+					if task.time is not None
+					else task.scheduled_minute if task.scheduled_minute is not None else 10**9
+				),
 				task.title.lower(),
 			),
 		)
@@ -378,6 +395,28 @@ class Scheduler:
 				continue
 			if status == "completed" and not effective_completed:
 				continue
+
+			filtered.append(task)
+
+		return filtered
+
+	def filter_tasks_by_completion_or_pet_name(
+		self,
+		tasks: List[Task],
+		completed: Optional[bool] = None,
+		pet_name: Optional[str] = None,
+	) -> List[Task]:
+		"""Filter tasks by completion status and/or pet name."""
+		filtered: List[Task] = []
+		normalized_pet_name = pet_name.strip().lower() if pet_name is not None else None
+
+		for task in tasks:
+			if completed is not None and task.completed is not completed:
+				continue
+
+			if normalized_pet_name is not None:
+				if task.pet is None or task.pet.name.lower() != normalized_pet_name:
+					continue
 
 			filtered.append(task)
 

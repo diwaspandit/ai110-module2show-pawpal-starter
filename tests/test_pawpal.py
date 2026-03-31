@@ -187,3 +187,72 @@ def test_time_window_placement_respects_allowed_windows() -> None:
 	assert len(schedule.items) == 2
 	assert schedule.items[0][0] == 8 * 60
 	assert schedule.items[1][0] == 8 * 60 + 30
+
+
+def test_sort_by_time_uses_hhmm_time_attribute() -> None:
+	scheduler = Scheduler()
+
+	late = Task(
+		title="Evening feed",
+		duration_minutes=15,
+		priority=PriorityLevel.MEDIUM,
+		time="18:30",
+	)
+	early = Task(
+		title="Morning walk",
+		duration_minutes=20,
+		priority=PriorityLevel.HIGH,
+		time="07:15",
+	)
+	mid = Task(
+		title="Lunch play",
+		duration_minutes=10,
+		priority=PriorityLevel.LOW,
+		time="12:00",
+	)
+
+	ordered = scheduler.sort_by_time([late, early, mid])
+
+	assert [task.title for task in ordered] == ["Morning walk", "Lunch play", "Evening feed"]
+
+
+def test_filter_tasks_by_completion_status() -> None:
+	pet = Pet(name="Mochi", species="dog")
+
+	complete_task = Task(
+		title="Done task",
+		duration_minutes=10,
+		priority=PriorityLevel.LOW,
+		completed=True,
+	)
+	incomplete_task = Task(
+		title="Open task",
+		duration_minutes=10,
+		priority=PriorityLevel.HIGH,
+	)
+	pet.add_task(complete_task)
+	pet.add_task(incomplete_task)
+
+	scheduler = Scheduler()
+	completed_only = scheduler.filter_tasks_by_completion_or_pet_name(
+		pet.tasks,
+		completed=True,
+	)
+
+	assert [task.title for task in completed_only] == ["Done task"]
+
+
+def test_filter_tasks_by_pet_name_case_insensitive() -> None:
+	dog = Pet(name="Mochi", species="dog")
+	cat = Pet(name="Luna", species="cat")
+
+	dog_task = Task(title="Walk", duration_minutes=20, priority=PriorityLevel.HIGH)
+	cat_task = Task(title="Feed", duration_minutes=10, priority=PriorityLevel.MEDIUM)
+	dog.add_task(dog_task)
+	cat.add_task(cat_task)
+
+	tasks = [dog_task, cat_task]
+	scheduler = Scheduler()
+	for_mochi = scheduler.filter_tasks_by_completion_or_pet_name(tasks, pet_name="mochi")
+
+	assert [task.title for task in for_mochi] == ["Walk"]
